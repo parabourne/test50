@@ -1,26 +1,56 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
+  /* Telegram Light Palette */
+  --background: #f0f2f5;
   --foreground: #171717;
+  --tg-blue: #3390ec;
+  --tg-chat-bg: #e6eee3;
+  --tg-my-message: #eeffde;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-tg-blue: var(--tg-blue);
+  --color-tg-chat-bg: var(--tg-chat-bg);
+  --color-tg-my-message: var(--tg-my-message);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
+/* Dark Mode istəmirəm dediyin üçün bu hissəni Telegram-ın tünd rəngləri ilə 
+   və ya sadəcə sabit rənglərlə saxlaya bilərik. 
+   Telegram Dark istəsən rəngləri bura yaza bilərik. */
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #f0f2f5; /* Hazırda light mode-u qoruyuruq */
+    --foreground: #171717;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar-ı incə və Telegram üslubunda edək */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
 }
