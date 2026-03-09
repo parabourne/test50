@@ -10,9 +10,11 @@ export default function P2PAnonimChat() {
   const [input, setInput] = useState("");
   const [conn, setConn] = useState<any>(null);
   const [status, setStatus] = useState("Yüklənir...");
+  const [remoteIsTyping, setRemoteIsTyping] = useState(false);
   
   const peerRef = useRef<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const typingTimeoutRef = useRef<any>(null);
 
   const playRetroSound = (freq = 800) => {
     try {
@@ -32,7 +34,6 @@ export default function P2PAnonimChat() {
     const savedMessages = localStorage.getItem("p2p_messages");
     if (savedMessages) setMessages(JSON.parse(savedMessages));
 
-    // Sabit ID yarat və ya mövcud olanı götür
     let savedId = localStorage.getItem("my_stable_peer_id");
     if (!savedId) {
       savedId = "user-" + Math.random().toString(36).substr(2, 6);
@@ -47,14 +48,8 @@ export default function P2PAnonimChat() {
       setStatus("Onlayn (Gözləyir)");
     });
 
-    // Başqası sənə zəng edəndə (Gələn bağlantı)
     peer.on("connection", (connection) => {
       setupConnection(connection);
-    });
-
-    peer.on("error", (err) => {
-      console.error(err);
-      setStatus("Xəta: " + err.type);
     });
 
     return () => peer.destroy();
@@ -68,36 +63,51 @@ export default function P2PAnonimChat() {
   const setupConnection = (connection: any) => {
     setStatus("Bağlantı qurulur...");
 
-    // Həqiqi bağlantı açılanda (Open event gözlənilir)
     connection.on("open", () => {
       setConn(connection);
       setStatus("Qoşuldu: " + connection.peer);
-      playRetroSound(1000); // Uğurlu bağlantı səsi
+      playRetroSound(1000);
     });
 
     connection.on("data", (data: any) => {
+      // Əgər gələn data TYPING siqnalıdırsa
+      if (data.type === "TYPING") {
+        setRemoteIsTyping(data.status);
+        return;
+      }
+
+      // Normal mesajdırsa
       setMessages((prev) => [...prev, data]);
+      setRemoteIsTyping(false); // Mesaj gəldisə yazmağı dayandırıb
       playRetroSound(800);
     });
 
     connection.on("close", () => {
       setStatus("Bağlantı kəsildi.");
       setConn(null);
+      setRemoteIsTyping(false);
     });
+  };
 
-    // Əgər qarşı tərəf yoxdursa və ya xəta verirsə
-    connection.on("error", () => {
-      setStatus("Xəta: Qoşulmaq mümkün olmadı.");
-      setConn(null);
-    });
+  // Mesaj yazarkən typing statusunu göndər
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInput(e.target.value);
+    
+    if (conn) {
+      // Qarşı tərəfə "Yazıram" siqnalı göndər
+      conn.send({ type: "TYPING", status: true });
+
+      // 2 saniyə heç nə yazmasa "typing" statusunu söndür
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = setTimeout(() => {
+        if (conn) conn.send({ type: "TYPING", status: false });
+      }, 2000);
+    }
   };
 
   const connectToPeer = () => {
     if (!remoteId || remoteId === peerId) return;
-    
-    // Əvvəlki bağlantı varsa bağla
     if (conn) conn.close();
-
     const connection = peerRef.current.connect(remoteId);
     setupConnection(connection);
   };
@@ -113,7 +123,10 @@ export default function P2PAnonimChat() {
       sender: "me"
     };
 
-    conn.send({ ...msgData, sender: "other" }); 
+    conn.send({ type: "MESSAGE", ...msgData, sender: "other" });
+    // Mesaj göndəriləndə typing statusunu dərhal söndür
+    conn.send({ type: "TYPING", status: false });
+    
     setMessages((prev) => [...prev, msgData]);
     playRetroSound(600);
     setInput("");
@@ -160,10 +173,17 @@ export default function P2PAnonimChat() {
           <div className="absolute inset-0 opacity-5 pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
           
           <header className="bg-white/90 backdrop-blur-md p-4 flex justify-between items-center z-10 border-b border-gray-100 shadow-sm">
-             <h4 className="font-bold text-sm flex items-center gap-2">
-               <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-               Anonim P2P Chat
-             </h4>
+             <div>
+               <h4 className="font-bold text-sm flex items-center gap-2">
+                 <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                 Anonim P2P Chat
+               </h4>
+               {remoteIsTyping ? (
+                 <p className="text-[11px] text-blue-500 italic animate-pulse">Həmkarınız yazır...</p>
+               ) : (
+                 <p className="text-[11px] text-green-500 font-medium">{conn ? 'online' : 'gözlənilir'}</p>
+               )}
+             </div>
              <button onClick={() => {if(confirm("Tarixçə silinsin?")) {setMessages([]); localStorage.removeItem("p2p_messages");}}} className="text-[9px] font-bold text-gray-400 uppercase hover:text-red-500 transition-colors">Tarixçəni təmizlə</button>
           </header>
 
@@ -192,9 +212,9 @@ export default function P2PAnonimChat() {
                 type="text" 
                 placeholder={conn ? "Mesaj yazın..." : "Əvvəlcə dostuna bağlan..."}
                 disabled={!conn}
-                className="flex-1 bg-gray-50 rounded-2xl px-4 py-3 outline-none text-sm focus:bg-white focus:ring-1 ring-blue-100 transition-all"
+                className="flex-1 bg-gray-100 rounded-2xl px-4 py-3 outline-none text-sm focus:bg-white focus:ring-1 ring-blue-100 transition-all"
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={handleInputChange}
               />
               <button type="submit" disabled={!conn} className="bg-[#3390ec] text-white p-3 rounded-full disabled:opacity-30 hover:bg-blue-600 transition-transform active:scale-90">
                 <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
